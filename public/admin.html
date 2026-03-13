@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MotoRapido — Admin</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0f1117;
+    --surface:  #1a1d27;
+    --border:   #2a2d3e;
+    --primary:  #f97316;
+    --danger:   #ef4444;
+    --success:  #22c55e;
+    --text:     #e2e8f0;
+    --muted:    #64748b;
+    --radius:   8px;
+  }
+
+  body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* ── LOGIN ─────────────────────────────── */
+  #login-screen {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh;
+  }
+  .login-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 2.5rem; width: 340px;
+  }
+  .login-card h1 { font-size: 1.4rem; margin-bottom: .25rem; }
+  .login-card p  { color: var(--muted); font-size: .875rem; margin-bottom: 1.75rem; }
+
+  /* ── APP ──────────────────────────────── */
+  #app { display: none; }
+
+  header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: .875rem 1.5rem; display: flex; align-items: center; gap: 1rem;
+  }
+  header h1 { font-size: 1.1rem; flex: 1; }
+  header span { color: var(--muted); font-size: .8rem; }
+
+  .tabs { display: flex; gap: .25rem; padding: 1.25rem 1.5rem .5rem; }
+  .tab-btn {
+    padding: .5rem 1.25rem; border-radius: var(--radius);
+    border: 1px solid var(--border); background: transparent;
+    color: var(--muted); cursor: pointer; font-size: .875rem; transition: all .15s;
+  }
+  .tab-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+
+  .tab-panel { display: none; padding: .5rem 1.5rem 1.5rem; }
+  .tab-panel.active { display: block; }
+
+  /* ── TOOLBAR ──────────────────────────── */
+  .toolbar {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 1rem;
+  }
+  .toolbar h2 { font-size: 1rem; font-weight: 600; }
+
+  /* ── BUTTONS ──────────────────────────── */
+  .btn {
+    display: inline-flex; align-items: center; gap: .4rem;
+    padding: .45rem 1rem; border-radius: var(--radius);
+    border: none; cursor: pointer; font-size: .8rem; font-weight: 600;
+    transition: opacity .15s;
+  }
+  .btn:hover { opacity: .85; }
+  .btn-primary  { background: var(--primary); color: #fff; }
+  .btn-danger   { background: var(--danger);  color: #fff; }
+  .btn-ghost {
+    background: transparent; color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-sm { padding: .3rem .65rem; font-size: .75rem; }
+
+  /* ── TABLE ────────────────────────────── */
+  .table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  th {
+    background: var(--surface); color: var(--muted);
+    font-weight: 600; font-size: .75rem; text-transform: uppercase;
+    letter-spacing: .05em; padding: .75rem 1rem; text-align: left;
+  }
+  td { padding: .7rem 1rem; border-top: 1px solid var(--border); vertical-align: middle; }
+  tr:hover td { background: rgba(255,255,255,.02); }
+
+  .badge {
+    display: inline-block; padding: .2rem .55rem;
+    border-radius: 999px; font-size: .7rem; font-weight: 700;
+  }
+  .badge-green  { background: rgba(34,197,94,.15);  color: var(--success); }
+  .badge-gray   { background: rgba(100,116,139,.15); color: var(--muted); }
+  .badge-orange { background: rgba(249,115,22,.15); color: var(--primary); }
+  .badge-red    { background: rgba(239,68,68,.15);  color: var(--danger); }
+  .badge-blue   { background: rgba(59,130,246,.15); color: #60a5fa; }
+
+  /* ── MODAL ────────────────────────────── */
+  .overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.65); z-index: 100;
+    align-items: center; justify-content: center;
+  }
+  .overlay.open { display: flex; }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.75rem; width: 420px; max-width: 95vw;
+  }
+  .modal h3 { font-size: 1rem; margin-bottom: 1.25rem; }
+  .modal-footer { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1.5rem; }
+
+  /* ── FORM ─────────────────────────────── */
+  .form-group { margin-bottom: 1rem; }
+  label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: .35rem; }
+  input[type=text], input[type=password] {
+    width: 100%; padding: .55rem .75rem;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius); color: var(--text); font-size: .875rem;
+    outline: none; transition: border-color .15s;
+  }
+  input:focus { border-color: var(--primary); }
+
+  /* ── TOAST ────────────────────────────── */
+  #toast {
+    position: fixed; bottom: 1.25rem; right: 1.25rem; z-index: 200;
+    padding: .75rem 1.25rem; border-radius: var(--radius);
+    font-size: .85rem; font-weight: 600; opacity: 0;
+    transition: opacity .25s; pointer-events: none;
+  }
+  #toast.show { opacity: 1; }
+  #toast.ok  { background: var(--success); color: #fff; }
+  #toast.err { background: var(--danger);  color: #fff; }
+
+  .actions { display: flex; gap: .35rem; }
+  .empty { color: var(--muted); text-align: center; padding: 2rem; font-size: .875rem; }
+</style>
+</head>
+<body>
+
+<!-- ── LOGIN ──────────────────────────────────────────────────────────────── -->
+<div id="login-screen">
+  <div class="login-card">
+    <h1>🏍 MotoRapido</h1>
+    <p>Painel de administração</p>
+    <div class="form-group">
+      <label>Senha do admin</label>
+      <input type="password" id="login-pass" placeholder="••••••••" autofocus>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Entrar</button>
+  </div>
+</div>
+
+<!-- ── APP ────────────────────────────────────────────────────────────────── -->
+<div id="app">
+  <header>
+    <h1>🏍 MotoRapido Admin</h1>
+    <span id="header-info"></span>
+    <button class="btn btn-ghost btn-sm" onclick="logout()">Sair</button>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('drivers')">Motoristas</button>
+    <button class="tab-btn"        onclick="switchTab('rides')">Corridas</button>
+  </div>
+
+  <!-- TAB: MOTORISTAS -->
+  <div id="tab-drivers" class="tab-panel active">
+    <div class="toolbar">
+      <h2>Motoristas cadastrados</h2>
+      <button class="btn btn-primary btn-sm" onclick="openModal()">+ Novo Motorista</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>Nome</th><th>Usuário</th><th>Veículo</th>
+            <th>Placa</th><th>Corridas</th><th>Avaliação</th><th>Status</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="drivers-body">
+          <tr><td colspan="9" class="empty">Carregando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB: CORRIDAS -->
+  <div id="tab-rides" class="tab-panel">
+    <div class="toolbar">
+      <h2>Últimas 50 corridas</h2>
+      <button class="btn btn-ghost btn-sm" onclick="loadRides()">↻ Atualizar</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>#</th><th>Data</th><th>Cliente</th><th>Motorista</th><th>Status</th></tr>
+        </thead>
+        <tbody id="rides-body">
+          <tr><td colspan="5" class="empty">Carregando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL MOTORISTA ─────────────────────────────────────────────────────── -->
+<div class="overlay" id="modal-overlay" onclick="handleOverlayClick(event)">
+  <div class="modal">
+    <h3 id="modal-title">Novo Motorista</h3>
+    <input type="hidden" id="driver-id">
+    <div class="form-group">
+      <label>Nome completo *</label>
+      <input type="text" id="f-name" placeholder="João da Silva">
+    </div>
+    <div class="form-group">
+      <label>Usuário (login) *</label>
+      <input type="text" id="f-username" placeholder="joaosilva">
+    </div>
+    <div class="form-group">
+      <label id="f-pass-label">Senha *</label>
+      <input type="password" id="f-password" placeholder="••••••••">
+    </div>
+    <div class="form-group">
+      <label>Modelo do veículo</label>
+      <input type="text" id="f-vehicle" placeholder="Honda CG 160">
+    </div>
+    <div class="form-group">
+      <label>Placa</label>
+      <input type="text" id="f-plate" placeholder="ABC-1234">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveDriver()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOAST ───────────────────────────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<script>
+  const BASE = window.location.origin;
+  let adminPassword = '';
+
+  // ── AUTH ─────────────────────────────────────────────────────────────────
+
+  function doLogin() {
+    const pass = document.getElementById('login-pass').value.trim();
+    if (!pass) return;
+    adminPassword = pass;
+    localStorage.setItem('moto_admin_pass', pass);
+    showApp();
+  }
+
+  function logout() {
+    localStorage.removeItem('moto_admin_pass');
+    adminPassword = '';
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('login-pass').value = '';
+  }
+
+  function showApp() {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('header-info').textContent = `Conectado como admin`;
+    loadDrivers();
+  }
+
+  document.getElementById('login-pass').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+
+  // ── API ──────────────────────────────────────────────────────────────────
+
+  async function apiFetch(path, opts = {}) {
+    const res = await fetch(BASE + path, {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-Password': adminPassword,
+        ...(opts.headers || {}),
+      },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    return data;
+  }
+
+  // ── TABS ─────────────────────────────────────────────────────────────────
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach((b, i) => {
+      b.classList.toggle('active', ['drivers','rides'][i] === tab);
+    });
+    document.getElementById('tab-drivers').classList.toggle('active', tab === 'drivers');
+    document.getElementById('tab-rides').classList.toggle('active', tab === 'rides');
+    if (tab === 'rides') loadRides();
+  }
+
+  // ── DRIVERS ──────────────────────────────────────────────────────────────
+
+  async function loadDrivers() {
+    const tbody = document.getElementById('drivers-body');
+    try {
+      const drivers = await apiFetch('/admin/drivers');
+      if (!drivers.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="empty">Nenhum motorista cadastrado</td></tr>';
+        return;
+      }
+      tbody.innerHTML = drivers.map(d => `
+        <tr>
+          <td>${d.id}</td>
+          <td><strong>${esc(d.name)}</strong></td>
+          <td style="color:var(--muted)">${esc(d.username)}</td>
+          <td>${esc(d.vehicle_model || '—')}</td>
+          <td>${esc(d.vehicle_plate || '—')}</td>
+          <td>${d.rides_count}</td>
+          <td>⭐ ${parseFloat(d.rating).toFixed(1)}</td>
+          <td>
+            <span class="badge ${d.online ? 'badge-green' : 'badge-gray'}">
+              ${d.online ? 'Online' : 'Offline'}
+            </span>
+          </td>
+          <td>
+            <div class="actions">
+              <button class="btn btn-ghost btn-sm" onclick='openModal(${JSON.stringify(d)})'>Editar</button>
+              <button class="btn btn-danger btn-sm" onclick="removeDriver(${d.id}, '${esc(d.name)}')">Remover</button>
+            </div>
+          </td>
+        </tr>`).join('');
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="9" class="empty">Erro: ${esc(err.message)}</td></tr>`;
+      if (err.message.includes('401')) logout();
+    }
+  }
+
+  async function removeDriver(id, name) {
+    if (!confirm(`Remover motorista "${name}"?\nEsta ação não pode ser desfeita.`)) return;
+    try {
+      await apiFetch(`/admin/drivers/${id}`, { method: 'DELETE' });
+      toast('Motorista removido', 'ok');
+      loadDrivers();
+    } catch (err) {
+      toast(err.message, 'err');
+    }
+  }
+
+  // ── MODAL ─────────────────────────────────────────────────────────────────
+
+  function openModal(driver = null) {
+    document.getElementById('modal-title').textContent = driver ? 'Editar Motorista' : 'Novo Motorista';
+    document.getElementById('driver-id').value    = driver?.id ?? '';
+    document.getElementById('f-name').value       = driver?.name ?? '';
+    document.getElementById('f-username').value   = driver?.username ?? '';
+    document.getElementById('f-password').value   = '';
+    document.getElementById('f-vehicle').value    = driver?.vehicle_model ?? '';
+    document.getElementById('f-plate').value      = driver?.vehicle_plate ?? '';
+
+    const passLabel = document.getElementById('f-pass-label');
+    const passInput = document.getElementById('f-username');
+    document.getElementById('f-username').disabled = !!driver;
+    passLabel.textContent = driver ? 'Nova senha (deixe em branco para manter)' : 'Senha *';
+
+    document.getElementById('modal-overlay').classList.add('open');
+    document.getElementById('f-name').focus();
+  }
+
+  function closeModal() {
+    document.getElementById('modal-overlay').classList.remove('open');
+  }
+
+  function handleOverlayClick(e) {
+    if (e.target === document.getElementById('modal-overlay')) closeModal();
+  }
+
+  async function saveDriver() {
+    const id       = document.getElementById('driver-id').value;
+    const name     = document.getElementById('f-name').value.trim();
+    const username = document.getElementById('f-username').value.trim();
+    const password = document.getElementById('f-password').value;
+    const vehicle  = document.getElementById('f-vehicle').value.trim();
+    const plate    = document.getElementById('f-plate').value.trim();
+
+    if (!name) return toast('Nome é obrigatório', 'err');
+    if (!id && !username) return toast('Usuário é obrigatório', 'err');
+    if (!id && !password) return toast('Senha é obrigatória', 'err');
+
+    const body = { name, vehicle_model: vehicle, vehicle_plate: plate };
+    if (!id) body.username = username;
+    if (password) body.password = password;
+
+    try {
+      if (id) {
+        await apiFetch(`/admin/drivers/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+        toast('Motorista atualizado', 'ok');
+      } else {
+        await apiFetch('/admin/drivers', { method: 'POST', body: JSON.stringify(body) });
+        toast('Motorista criado', 'ok');
+      }
+      closeModal();
+      loadDrivers();
+    } catch (err) {
+      toast(err.message, 'err');
+    }
+  }
+
+  // ── RIDES ─────────────────────────────────────────────────────────────────
+
+  const STATUS_BADGE = {
+    searching:  'badge-orange',
+    accepted:   'badge-blue',
+    arriving:   'badge-blue',
+    completed:  'badge-green',
+    cancelled:  'badge-red',
+  };
+
+  const STATUS_LABEL = {
+    searching:  'Buscando',
+    accepted:   'Aceita',
+    arriving:   'A caminho',
+    completed:  'Concluída',
+    cancelled:  'Cancelada',
+  };
+
+  async function loadRides() {
+    const tbody = document.getElementById('rides-body');
+    try {
+      const rides = await apiFetch('/admin/rides');
+      if (!rides.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty">Nenhuma corrida registrada</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rides.map(r => `
+        <tr>
+          <td>${r.id}</td>
+          <td style="color:var(--muted);font-size:.8rem">${fmtDate(r.requested_at)}</td>
+          <td>${esc(r.client_name)}</td>
+          <td>${esc(r.driver_name || '—')}</td>
+          <td>
+            <span class="badge ${STATUS_BADGE[r.status] || 'badge-gray'}">
+              ${STATUS_LABEL[r.status] || r.status}
+            </span>
+          </td>
+        </tr>`).join('');
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="5" class="empty">Erro: ${esc(err.message)}</td></tr>`;
+    }
+  }
+
+  // ── HELPERS ───────────────────────────────────────────────────────────────
+
+  function esc(str) {
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+  }
+
+  let toastTimer;
+  function toast(msg, type) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = `show ${type}`;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.className = '', 3000);
+  }
+
+  // ── INIT ──────────────────────────────────────────────────────────────────
+
+  const saved = localStorage.getItem('moto_admin_pass');
+  if (saved) {
+    adminPassword = saved;
+    showApp();
+  }
+</script>
+</body>
+</html>
