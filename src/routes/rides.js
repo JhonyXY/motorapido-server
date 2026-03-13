@@ -3,6 +3,20 @@ const authMiddleware = require('../middlewares/auth');
 const pool         = require('../db/connection');
 const { getIO, driverSockets, clientSockets } = require('../services/socketService');
 
+// Timeouts de corridas sem aceite
+const rideTimeouts = new Map();
+
+// Distância em km entre dois pontos (Haversine)
+function distanceKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 // ── POST /rides/request ───────────────────────────────────────────────────────
 // Público (sem auth). Cria a corrida e notifica motoristas online.
 router.post('/request', async (req, res) => {
@@ -19,17 +33,56 @@ router.post('/request', async (req, res) => {
     );
     const ride_id = rows[0].id;
 
-    // Notifica motoristas online que NÃO têm corrida ativa
+    // Motoristas online sem corrida ativa e suas posições
     const { rows: busy } = await pool.query(
       `SELECT driver_id FROM rides WHERE status = 'accepted'`
     );
     const busyIds = new Set(busy.map(r => r.driver_id));
 
-    for (const [dId, sId] of driverSockets.entries()) {
-      if (!busyIds.has(dId)) {
-        getIO().to(sId).emit('new_ride', { ride_id, client_name, client_lat, client_lng });
-      }
+    const { rows: driversPos } = await pool.query(
+      `SELECT id, current_lat, current_lng FROM drivers WHERE online = true`
+    );
+
+    const RADIUS_KM = 5;
+    const TIMEOUT_MS = 30000;
+
+    // Filtra por raio e ordena por proximidade
+    const nearby = driversPos
+      .filter(d => !busyIds.has(d.id) && driverSockets.has(d.id) && d.current_lat && d.current_lng)
+      .map(d => ({ ...d, dist: distanceKm(client_lat, client_lng, parseFloat(d.current_lat), parseFloat(d.current_lng)) }))
+      .filter(d => d.dist <= RADIUS_KM)
+      .sort((a, b) => a.dist - b.dist);
+
+    // Fallback: envia para todos disponíveis se nenhum estiver no raio
+    const targets = nearby.length > 0
+      ? nearby
+      : driversPos.filter(d => !busyIds.has(d.id) && driverSockets.has(d.id));
+
+    for (const d of targets) {
+      const sId = driverSockets.get(d.id);
+      if (sId) getIO().to(sId).emit('new_ride', { ride_id, client_name, client_lat, client_lng });
     }
+
+    // Timeout: cancela automaticamente se ninguém aceitar em 30s
+    const timeout = setTimeout(async () => {
+      try {
+        const { rows } = await pool.query(
+          `UPDATE rides SET status = 'cancelled' WHERE id = $1 AND status = 'searching' RETURNING id`,
+          [ride_id]
+        );
+        if (rows[0]) {
+          const clientSocketId = clientSockets.get(ride_id);
+          if (clientSocketId) getIO().to(clientSocketId).emit('no_drivers', { ride_id });
+          // Avisa motoristas para fechar o card
+          for (const [, sId] of driverSockets.entries()) {
+            getIO().to(sId).emit('ride_taken', { ride_id });
+          }
+        }
+      } catch (e) { console.error('Timeout cancel error:', e); }
+      rideTimeouts.delete(ride_id);
+    }, TIMEOUT_MS);
+
+    rideTimeouts.set(ride_id, timeout);
 
     res.status(201).json({ ride_id });
   } catch (err) {
@@ -43,6 +96,10 @@ router.post('/request', async (req, res) => {
 router.post('/:id/accept', authMiddleware, async (req, res) => {
   const ride_id   = parseInt(req.params.id);
   const driver_id = req.driver.id;
+
+  // Cancela o timeout de busca
+  const t = rideTimeouts.get(ride_id);
+  if (t) { clearTimeout(t); rideTimeouts.delete(ride_id); }
 
   try {
     const { rows } = await pool.query(
@@ -135,6 +192,9 @@ router.post('/:id/complete', authMiddleware, async (req, res) => {
 // Público. Cancela corrida e notifica ambos os lados.
 router.post('/:id/cancel', async (req, res) => {
   const ride_id = parseInt(req.params.id);
+
+  const t = rideTimeouts.get(ride_id);
+  if (t) { clearTimeout(t); rideTimeouts.delete(ride_id); }
 
   try {
     const { rows } = await pool.query(
