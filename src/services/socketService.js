@@ -24,6 +24,16 @@ function init(io) {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         if (decoded.id !== driver_id) return;
 
+        // Desconecta sessão anterior do mesmo motorista (previne dupla sessão)
+        const existingSocketId = driverSockets.get(driver_id);
+        if (existingSocketId && existingSocketId !== socket.id) {
+          const existingSocket = io.sockets.sockets.get(existingSocketId);
+          if (existingSocket) {
+            existingSocket.emit('session_replaced', {});
+            existingSocket.disconnect(true);
+          }
+        }
+
         driverSockets.set(driver_id, socket.id);
         await pool.query('UPDATE drivers SET online = true WHERE id = $1', [driver_id]);
         console.log(`Motorista ${driver_id} online (socket: ${socket.id})`);
